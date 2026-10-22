@@ -454,6 +454,7 @@
     <select class="filter" id="fStatus"><option value="">Любой статус</option></select>
     <select class="filter" id="fAssignee"><option value="">Любой ответственный</option></select>
     <select class="filter" id="fSection"><option value="">Любой раздел</option></select>
+    <select class="filter" id="fAuthor"><option value="">Кто вносит: все</option></select>
     <select class="filter" id="fSort">
       <option value="new">Сначала новые</option>
       <option value="old">Сначала старые</option>
@@ -499,9 +500,16 @@
       <button class="close-x" id="closeModal">✕</button>
     </div>
     <form id="bugForm">
-      <div class="field">
-        <label>Язык</label>
-        <select id="fldLanguage" required></select>
+      <div class="grid2">
+        <div class="field">
+          <label>Язык</label>
+          <select id="fldLanguage" required></select>
+        </div>
+        <div class="field" id="authorField" style="display:none;">
+          <label>Кто вносит</label>
+          <select id="fldAuthor"></select>
+          <div class="field-error" id="authorError">Выберите, кто вносит правку.</div>
+        </div>
       </div>
       <div class="grid2">
         <div class="field">
@@ -611,6 +619,11 @@ const CATEGORIES = {
                              "Цена или валюта отображаются неверно","Единицы измерения и размеры","Неверный порядок по алфавиту"],
   "Прочее": ["—"]
 };
+// Для языков с несколькими исполнителями — поле «Кто вносит» и фильтр по нему
+const AUTHORS_BY_LANGUAGE = {
+  "Английский (Wilbi)": ["Вика","Соня"]
+};
+const ALL_AUTHORS = [...new Set(Object.values(AUTHORS_BY_LANGUAGE).flat())];
 const LANGUAGES = ["Русский","Английский","Английский (Wilbi)","Азербайджанский","Амхарский","Грузинский","Казахский","Узбекский","Киргизский","Армянский","Таджикский"];
 const PRIORITIES = ["Блокер","Высокий","Средний","Низкий"];
 // Подсказки под подкатегорией — для тех, что легко перепутать
@@ -784,6 +797,7 @@ function initStaticSelects(){
   $('#fldSection').innerHTML = '<option value="">— выберите —</option>' + SECTIONS.map(s=>`<option value="${s}">${s}</option>`).join('') +
     `<option value="${SECTION_OTHER}">Другое…</option>`;
 
+  $('#fAuthor').innerHTML = '<option value="">Кто вносит: все</option>' + ALL_AUTHORS.map(a=>`<option value="${a}">${a}</option>`).join('');
   fillSelect($('#fldLanguage'), LANGUAGES, false);
   fillSelect($('#fldCategory'), Object.keys(CATEGORIES), false);
 
@@ -832,6 +846,16 @@ function updateSectionOther(){
   $('#fldSectionOther').style.display = other ? 'block' : 'none';
   $('#sectionError').classList.remove('show');
 }
+// Поле «Кто вносит» видно только для языков, где правки вносят несколько человек
+function updateAuthorField(value){
+  const authors = AUTHORS_BY_LANGUAGE[$('#fldLanguage').value];
+  $('#authorField').style.display = authors ? 'block' : 'none';
+  $('#authorError').classList.remove('show');
+  if(!authors){ $('#fldAuthor').innerHTML = ''; return; }
+  const keep = value !== undefined ? value : $('#fldAuthor').value;
+  $('#fldAuthor').innerHTML = '<option value="">— выберите —</option>' + authors.map(a=>`<option value="${a}">${a}</option>`).join('');
+  $('#fldAuthor').value = authors.includes(keep) ? keep : '';
+}
 function updateCharBar(){
   const chars = SPECIAL_CHARS[$('#fldLanguage').value] || [];
   $('#charBar').innerHTML = chars.map(c => `<button type="button" data-ch="${c}">${c}</button>`).join('');
@@ -841,12 +865,12 @@ function updateCharBar(){
 function slug(s){ return s.replace(/\s+/g,'_'); }
 
 function render(){
-  const activeFilters = ['#fLanguage','#fCategory','#fPriority','#fStatus','#fAssignee','#fSection'].filter(sel=>$(sel).value).length;
+  const activeFilters = ['#fLanguage','#fCategory','#fPriority','#fStatus','#fAssignee','#fSection','#fAuthor'].filter(sel=>$(sel).value).length;
   $('#filtersToggle').textContent = activeFilters ? `Фильтры · ${activeFilters}` : 'Фильтры';
   renderStats();
   const q = $('#searchInput').value.trim().toLowerCase();
   const fl = $('#fLanguage').value, fc = $('#fCategory').value, fp = $('#fPriority').value, fs = $('#fStatus').value, fa = $('#fAssignee').value;
-  const sort = $('#fSort').value, fsec = $('#fSection').value;
+  const sort = $('#fSort').value, fsec = $('#fSection').value, fau = $('#fAuthor').value;
   fillSectionFilter();
 
   const filtered = bugs.filter(b=>{
@@ -856,8 +880,9 @@ function render(){
     if(fs && b.status !== fs) return false;
     if(fa && b.assignee !== fa) return false;
     if(fsec && b.section !== fsec) return false;
+    if(fau && b.author !== fau) return false;
     if(q){
-      const hay = [b.section,b.location,b.wrong,b.right,b.comment,b.managerComment,b.category,b.subcategory,b.language,b.num].join(' ').toLowerCase();
+      const hay = [b.section,b.author,b.location,b.wrong,b.right,b.comment,b.managerComment,b.category,b.subcategory,b.language,b.num].join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -882,7 +907,7 @@ function render(){
   filtered.forEach(b=>{
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="c-lang"><span class="cat-badge">${escapeHtml(b.language||'—')}</span></td>
+      <td class="c-lang"><span class="cat-badge">${escapeHtml(b.language||'—')}</span>${b.author ? `<span class="subcat">${escapeHtml(b.author)}</span>` : ''}</td>
       <td class="c-cat">
         <span class="cat-badge">${escapeHtml(b.category)}</span>
         <span class="subcat">${escapeHtml(b.subcategory)}</span>
@@ -905,7 +930,7 @@ function render(){
         ${escapeHtml(truncate(b.comment,70))}
         ${b.managerComment ? `<span class="mgr"><b>Менеджер:</b> ${escapeHtml(truncate(b.managerComment,70))}</span>` : ''}
       </td>
-      <td class="loc-cell mono c-date">${b.language ? `<span class="m-only">${escapeHtml(b.language)} · </span>` : ''}${formatDate(b.createdAt)}</td>
+      <td class="loc-cell mono c-date">${b.language ? `<span class="m-only">${escapeHtml(b.language)}${b.author ? ' · '+escapeHtml(b.author) : ''} · </span>` : ''}${formatDate(b.createdAt)}</td>
       <td class="c-act">
         <div class="row-actions">
           ${b.screenshotUrl ? `<button type="button" class="icon-btn shot-view" title="Посмотреть скриншот">📎</button>` : ''}
@@ -1026,7 +1051,7 @@ function escapeHtml(s){
 /* ---------------- Modal ---------------- */
 function takeSnapshot(){
   const p = document.querySelector('#priorityChoice input:checked');
-  return JSON.stringify(['#fldLanguage','#fldCategory','#fldSubcategory','#fldSection','#fldSectionOther','#fldLocation','#fldWrong','#fldRight','#fldComment','#fldManagerComment']
+  return JSON.stringify(['#fldLanguage','#fldAuthor','#fldCategory','#fldSubcategory','#fldSection','#fldSectionOther','#fldLocation','#fldWrong','#fldRight','#fldComment','#fldManagerComment']
     .map(s=>$(s).value).concat([p ? p.value : '', shotChanged]));
 }
 function openNew(keep){
@@ -1053,6 +1078,7 @@ function openNew(keep){
     updateFieldLabels();
   }
   setSection(draft.section || '');
+  updateAuthorField(draft.author || ''); // каждый работает в своём браузере — автор запоминается
   updateCharBar();
   resetShotUI();
   document.querySelector('#priorityChoice input[value="Средний"]').checked = true;
@@ -1081,6 +1107,7 @@ function openEdit(id){
   updateFieldLabels();
   updateCharBar();
   setSection(b.section || '');
+  updateAuthorField(b.author || '');
   $('#fldLocation').value = b.location||'';
   $('#fldWrong').value = b.wrong||'';
   $('#fldRight').value = b.right||'';
@@ -1163,7 +1190,7 @@ $('#batchInput').addEventListener('change', e=>{
 });
 $('#skipBtn').addEventListener('click', ()=>{
   nextFromQueue({language: $('#fldLanguage').value, category: $('#fldCategory').value,
-                 subcategory: $('#fldSubcategory').value, section: getSection(), location: $('#fldLocation').value.trim()});
+                 subcategory: $('#fldSubcategory').value, section: getSection(), location: $('#fldLocation').value.trim(), author: $('#fldAuthor').value});
 });
 
 /* ---------------- Screenshot handling ---------------- */
@@ -1228,8 +1255,13 @@ $('#cancelBtn').addEventListener('click', ()=>closeModal());
 $('#overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 $('#fldCategory').addEventListener('change', updateSubcategoryOptions);
 $('#fldSubcategory').addEventListener('change', updateFieldLabels);
+$('#fldAuthor').addEventListener('change', ()=>{
+  $('#authorError').classList.remove('show');
+  if(!editingId && $('#fldAuthor').value) writeDraft({...readDraft(), author: $('#fldAuthor').value});
+});
 $('#fldLanguage').addEventListener('change', ()=>{
   updateCharBar();
+  updateAuthorField();
   // выбранный в новом баге язык запоминаем сразу, не дожидаясь сохранения
   if(!editingId) writeDraft({...readDraft(), language: $('#fldLanguage').value});
 });
@@ -1237,7 +1269,7 @@ $('#fldSection').addEventListener('change', updateSectionOther);
 $('#fldSectionOther').addEventListener('input', ()=> $('#sectionError').classList.remove('show'));
 $('#priorityChoice').addEventListener('change', updatePriorityHint);
 ['#fldWrong','#fldRight'].forEach(sel=> $(sel).addEventListener('input', ()=> $('#textError').classList.remove('show')));
-['#searchInput','#fLanguage','#fCategory','#fPriority','#fStatus','#fAssignee','#fSection','#fSort'].forEach(sel=>{
+['#searchInput','#fLanguage','#fCategory','#fPriority','#fStatus','#fAssignee','#fSection','#fAuthor','#fSort'].forEach(sel=>{
   $(sel).addEventListener('input', render);
   $(sel).addEventListener('change', render);
 });
@@ -1264,6 +1296,11 @@ $('#bugForm').addEventListener('submit', async e=>{
   if(!$('#fldWrong').value.trim() && !$('#fldRight').value.trim()){
     $('#textError').classList.add('show');
     $('#fldWrong').focus();
+    return;
+  }
+  if(AUTHORS_BY_LANGUAGE[$('#fldLanguage').value] && !$('#fldAuthor').value){
+    $('#authorError').classList.add('show');
+    $('#fldAuthor').focus();
     return;
   }
   // раздел обязателен для новых багов; у старых его могло не быть — не мешаем их править
@@ -1307,6 +1344,7 @@ $('#bugForm').addEventListener('submit', async e=>{
     category: $('#fldCategory').value,
     subcategory: $('#fldSubcategory').value,
     section: getSection(),
+    author: AUTHORS_BY_LANGUAGE[$('#fldLanguage').value] ? $('#fldAuthor').value : '',
     location: $('#fldLocation').value.trim(),
     wrong: $('#fldWrong').value.trim(),
     right: $('#fldRight').value.trim(),
@@ -1336,7 +1374,8 @@ $('#bugForm').addEventListener('submit', async e=>{
   const saved = normalizeBug(res.bug || bug); // старый бэкенд не возвращает bug
   if(isNew){ bugs.push(saved); } else { bugs[bugs.findIndex(b=>b.id===id)] = saved; }
   const draft = {language: saved.language, category: saved.category, subcategory: saved.subcategory,
-                 section: saved.section, location: saved.location};
+                 section: saved.section, location: saved.location,
+                 author: saved.author || readDraft().author};
   writeDraft(draft);
   showToast(isNew ? `Баг №${saved.num} добавлен` : 'Изменения сохранены');
   render();
@@ -1357,8 +1396,8 @@ $('#deleteBtn').addEventListener('click', async ()=>{
 
 /* ---------------- CSV export ---------------- */
 $('#exportBtn').addEventListener('click', ()=>{
-  const headers = ['№','Язык','Категория','Подкатегория','Раздел','Как найти ошибку','Неправильный перевод','Новый перевод','Кто исправляет','Приоритет','Статус','Комментарий переводчика','Комментарий менеджера','Скриншот','Дата'];
-  const rows = bugs.map(b=>[b.num,b.language,b.category,b.subcategory,b.section,b.location,b.wrong,b.right,b.assignee,b.priority,b.status,b.comment,b.managerComment,b.screenshotUrl,formatDate(b.createdAt)]);
+  const headers = ['№','Язык','Кто вносит','Категория','Подкатегория','Раздел','Как найти ошибку','Неправильный перевод','Новый перевод','Кто исправляет','Приоритет','Статус','Комментарий переводчика','Комментарий менеджера','Скриншот','Дата'];
+  const rows = bugs.map(b=>[b.num,b.language,b.author,b.category,b.subcategory,b.section,b.location,b.wrong,b.right,b.assignee,b.priority,b.status,b.comment,b.managerComment,b.screenshotUrl,formatDate(b.createdAt)]);
   const csv = [headers, ...rows].map(r =>
     r.map(v => '"' + String(v||'').replace(/"/g,'""') + '"').join(',')
   ).join('\r\n');
