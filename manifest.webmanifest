@@ -1,0 +1,13 @@
+{
+  "name": "LQA-трекер магазина (Android)",
+  "short_name": "LQA Android",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8F5FB",
+  "theme_color": "#6C0BA9",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
