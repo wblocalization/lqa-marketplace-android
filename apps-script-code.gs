@@ -14,7 +14,7 @@ const SHOT_FOLDER_NAME = 'LQA Screenshots';
 // чтобы уже заполненные строки не съезжали.
 const LAYOUT = ['id','num','createdAt','updatedAt','language','category','subcategory',
                 'location','wrong','right','assignee','priority','status','comment','screenshotUrl',
-                'screenshotPreview','section','url','managerComment'];
+                'screenshotPreview','section','url','managerComment','author'];
 const PREVIEW = 'screenshotPreview';                 // формула IMAGE(), не данные
 const COLUMNS = LAYOUT.filter(c => c !== PREVIEW);    // поля бага
 function col(name) { return LAYOUT.indexOf(name) + 1; }
